@@ -32,7 +32,9 @@
 #define ThreadRestrictionVerifier_h
 
 #include <wtf/Assertions.h>
+#if PLATFORM(IOS)
 #include <wtf/MainThread.h>
+#endif
 #include <wtf/Threading.h>
 #include <wtf/ThreadingPrimitives.h>
 
@@ -48,6 +50,12 @@ namespace WTF {
 // The default mode is to verify that the object will only be used on a single thread. The
 // thread gets captured when setShared(true) is called.
 // The mode may be changed by calling useMutexMode (or turnOffVerification).
+
+// FIXME: This verifier is switched off because it fires false positives for
+// objects that are used on multiple threads. Instead of an opt-out verifier,
+// we probably need an opt-in verifier that marks select objects as being
+// tied to select threads.
+#if 0
 class ThreadRestrictionVerifier {
 public:
     ThreadRestrictionVerifier()
@@ -58,7 +66,9 @@ public:
 #if HAVE(DISPATCH_H)
         , m_owningQueue(0)
 #endif
+#if PLATFORM(IOS)
         , m_ownedByWebOrMainThread(false)
+#endif
     {
     }
 
@@ -72,7 +82,6 @@ public:
 
     void setMutexMode(Mutex& mutex)
     {
-        ASSERT(m_mode == SingleThreadVerificationMode || (m_mode == MutexVerificationMode && &mutex == m_mutex));
         m_mode = MutexVerificationMode;
         m_mutex = &mutex;
     }
@@ -80,7 +89,6 @@ public:
 #if HAVE(DISPATCH_H)
     void setDispatchQueueMode(dispatch_queue_t queue)
     {
-        ASSERT(m_mode == SingleThreadVerificationMode);
         m_mode = SingleDispatchQueueVerificationMode;
         m_owningQueue = queue;
         dispatch_retain(m_owningQueue);
@@ -89,7 +97,6 @@ public:
 
     void turnOffVerification()
     {
-        ASSERT(m_mode == SingleThreadVerificationMode);
         m_mode = NoVerificationMode;
     }
 
@@ -109,7 +116,9 @@ public:
             ASSERT(shared != previouslyShared);
             // Capture the current thread to verify that subsequent ref/deref happen on this thread.
             m_owningThread = currentThread();
-            m_ownedByWebOrMainThread = isMainThread() || pthread_main_np();
+#if PLATFORM(IOS)
+            m_ownedByWebOrMainThread = pthread_main_np() || isMainThread();
+#endif
             return;
 
 #if HAVE(DISPATCH_H)
@@ -130,7 +139,11 @@ public:
 
         switch (m_mode) {
         case SingleThreadVerificationMode:
-            return m_owningThread == currentThread() || (m_ownedByWebOrMainThread && (isMainThread() || pthread_main_np()));
+#if !PLATFORM(IOS)
+            return m_owningThread == currentThread();
+#else
+            return m_owningThread == currentThread() || (m_ownedByWebOrMainThread && (pthread_main_np() || isMainThread()));
+#endif
         case MutexVerificationMode:
             if (!m_mutex->tryLock())
                 return true;
@@ -141,11 +154,15 @@ public:
         case SingleDispatchQueueVerificationMode:
 
 // dispatch_get_current_queue has been deprecated in iOS 6. <rdar://problem/11881264> tracks coming up with a replacement.
+#if PLATFORM(IOS)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
             return m_owningQueue == dispatch_get_current_queue();
 
+#if PLATFORM(IOS)
 #pragma clang diagnostic pop
+#endif
 #endif
 
         case NoVerificationMode:
@@ -178,8 +195,43 @@ private:
     // Used by SingleDispatchQueueVerificationMode.
     dispatch_queue_t m_owningQueue;
 #endif
+#if PLATFORM(IOS)
     bool m_ownedByWebOrMainThread;
+#endif
 };
+#else
+class ThreadRestrictionVerifier {
+public:
+    ThreadRestrictionVerifier()
+    {
+    }
+
+    void setMutexMode(Mutex&)
+    {
+    }
+
+#if HAVE(DISPATCH_H)
+    void setDispatchQueueMode(dispatch_queue_t)
+    {
+    }
+#endif
+
+    void turnOffVerification()
+    {
+    }
+
+    // Indicates that the object may (or may not) be owned by more than one place.
+    void setShared(bool)
+    {
+    }
+
+    // Is it OK to use the object at this moment on the current thread?
+    bool isSafeToUse() const
+    {
+        return true;
+    }
+};
+#endif
 
 }
 

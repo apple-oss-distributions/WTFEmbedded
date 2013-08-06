@@ -36,7 +36,6 @@
 #include "dtoa.h"
 
 #include <stdio.h>
-#include <wtf/AlwaysInline.h>
 #include <wtf/MathExtras.h>
 #include <wtf/Threading.h>
 #include <wtf/Vector.h>
@@ -113,7 +112,7 @@ static ALWAYS_INLINE uint32_t* storeInc(uint32_t* p, uint16_t high, uint16_t low
 #define Big0 (Frac_mask1 | Exp_msk1 * (DBL_MAX_EXP + Bias - 1))
 #define Big1 0xffffffff
 
-#if CPU(PPC64) || CPU(X86_64)
+#if CPU(PPC64) || CPU(X86_64) || CPU(ARM64)
 // FIXME: should we enable this on all 64-bit CPUs?
 // 64-bit emulation provided by the compiler is likely to be slower than dtoa own code on 32-bit hardware.
 #define USE_LONG_LONG
@@ -742,7 +741,7 @@ void dtoa(DtoaBuffer result, double dd, int ndigits, bool& signOut, int& exponen
     // roundingNone only allowed (only sensible?) with leftright set.
     ASSERT(!roundingNone || leftright);
 
-    ASSERT(isfinite(dd));
+    ASSERT(std::isfinite(dd));
 
     int bbits, b2, b5, be, dig, i, ieps, ilim = 0, ilim0, ilim1 = 0,
         j, j1, k, k0, k_check, m2, m5, s2, s5,

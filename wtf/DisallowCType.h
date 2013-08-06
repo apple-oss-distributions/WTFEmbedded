@@ -29,15 +29,19 @@
 #ifndef WTF_DisallowCType_h
 #define WTF_DisallowCType_h
 
-#include "Platform.h"
-
-#define _DONT_USE_CTYPE_INLINE_
-
 // The behavior of many of the functions in the <ctype.h> header is dependent
 // on the current locale. But almost all uses of these functions are for
 // locale-independent, ASCII-specific purposes. In WebKit code we use our own
 // ASCII-specific functions instead. This header makes sure we get a compile-time
 // error if we use one of the <ctype.h> functions by accident.
+
+// this breaks compilation of <QFontDatabase>, at least, so turn it off for now
+// Also generates errors on wx on Windows, presumably because these functions
+// are used from wx headers. On GTK+ for Mac many GTK+ files include <libintl.h>
+// or <glib/gi18n-lib.h>, which in turn include <xlocale/_ctype.h> which uses
+// isacii(). 
+#include <wtf/Platform.h>
+#if !PLATFORM(QT) && !(OS(DARWIN) && PLATFORM(GTK)) && !OS(QNX) && !defined(_LIBCPP_VERSION)
 
 #include <ctype.h>
 
@@ -74,5 +78,7 @@
 #define toascii toascii_WTF_Please_use_ASCIICType_instead_of_ctype_see_comment_in_ASCIICType_h
 #define tolower tolower_WTF_Please_use_ASCIICType_instead_of_ctype_see_comment_in_ASCIICType_h
 #define toupper toupper_WTF_Please_use_ASCIICType_instead_of_ctype_see_comment_in_ASCIICType_h
+
+#endif
 
 #endif

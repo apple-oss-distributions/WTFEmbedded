@@ -12,9 +12,15 @@ CONFIG += staticlib
 
 VPATH += $$PWD/wtf
 
+INCLUDEPATH += $$PWD/wtf
+
+wince* {
+    # for mt19937ar.c
+    INCLUDEPATH += $${ROOT_WEBKIT_DIR}/Source/ThirdParty
+}
+
 HEADERS += \
     Alignment.h \
-    AlwaysInline.h \
     ArrayBuffer.h \
     ArrayBufferView.h \
     ASCIICType.h \
@@ -22,10 +28,12 @@ HEADERS += \
     Atomics.h \
     AVLTree.h \
     Bitmap.h \
+    BitArray.h \
     BitVector.h \
     BloomFilter.h \
     BoundsCheckedPointer.h \
     BumpPointerAllocator.h \
+    ByteOrder.h \
     CheckedArithmetic.h \
     Compiler.h \
     CryptographicallyRandomNumber.h \
@@ -49,14 +57,20 @@ HEADERS += \
     dtoa/utils.h \
     DynamicAnnotations.h \
     Encoder.h \
+    EnumClass.h \
+    ExportMacros.h \
     FastAllocBase.h \
     FastMalloc.h \
+    FeatureDefines.h \
+    FilePrintStream.h \
     FixedArray.h \
     Float32Array.h \
     Float64Array.h \
     Forward.h \
+    FunctionDispatcher.h \
     Functional.h \
     GetPtr.h \
+    GregorianDateTime.h \
     HashCountedSet.h \
     HashFunctions.h \
     HashIterators.h \
@@ -69,12 +83,11 @@ HEADERS += \
     Int32Array.h \
     Int8Array.h \
     ListHashSet.h \
-    ListRefPtr.h \
     Locker.h \
     MainThread.h \
-    MallocZoneSupport.h \
     MathExtras.h \
     MD5.h \
+    MediaTime.h \
     MessageQueue.h \
     MetaAllocator.h \
     MetaAllocatorHandle.h \
@@ -83,6 +96,7 @@ HEADERS += \
     NotFound.h \
     NullPtr.h \
     NumberOfCores.h \
+    RAMSize.h \
     OSAllocator.h \
     OSRandomSource.h \
     OwnArrayPtr.h \
@@ -103,9 +117,11 @@ HEADERS += \
     PassTraits.h \
     Platform.h \
     PossiblyNull.h \
-    qt/UtilsQt.h \
+    PrintStream.h \
+    ProcessID.h \
     RandomNumber.h \
     RandomNumberSeed.h \
+    RawPointer.h \
     RedBlackTree.h \
     RefCounted.h \
     RefCountedLeakCounter.h \
@@ -113,12 +129,14 @@ HEADERS += \
     RefPtrHashMap.h \
     RetainPtr.h \
     SHA1.h \
+    SaturatedArithmetic.h \
     Spectrum.h \
     StackBounds.h \
     StaticConstructors.h \
     StdLibExtras.h \
     StringExtras.h \
     StringHasher.h \
+    StringPrintStream.h \
     TCPackedCache.h \
     TCSpinLock.h \
     TCSystemAlloc.h \
@@ -126,7 +144,10 @@ HEADERS += \
     text/AtomicString.h \
     text/AtomicStringHash.h \
     text/AtomicStringImpl.h \
+    text/AtomicStringTable.h \
+    text/Base64.h \
     text/CString.h \
+    text/IntegerToStringConversion.h \
     text/StringBuffer.h \
     text/StringBuilder.h \
     text/StringConcatenate.h \
@@ -135,6 +156,7 @@ HEADERS += \
     text/StringOperators.h \
     text/TextPosition.h \
     text/WTFString.h \
+    threads/BinarySemaphore.h \
     Threading.h \
     ThreadingPrimitives.h \
     ThreadRestrictionVerifier.h \
@@ -148,17 +170,16 @@ HEADERS += \
     unicode/CharacterNames.h \
     unicode/Collator.h \
     unicode/icu/UnicodeIcu.h \
-    unicode/qt4/UnicodeQt4.h \
     unicode/ScriptCodesFromICU.h \
     unicode/Unicode.h \
     unicode/UnicodeMacrosFromICU.h \
     unicode/UTF8.h \
-    UnusedParam.h \
     ValueCheck.h \
     Vector.h \
     VectorTraits.h \
     VMTags.h \
-    WTFThreadData.h
+    WTFThreadData.h \
+    WeakPtr.h
 
 unix: HEADERS += ThreadIdentifierDataPthreads.h
 
@@ -166,6 +187,7 @@ SOURCES += \
     ArrayBuffer.cpp \
     ArrayBufferView.cpp \
     Assertions.cpp \
+    Atomics.cpp \
     BitVector.cpp \
     CryptographicallyRandomNumber.cpp \
     CurrentTime.cpp \
@@ -182,29 +204,38 @@ SOURCES += \
     dtoa/fixed-dtoa.cc \
     dtoa/strtod.cc \
     FastMalloc.cpp \
+    FilePrintStream.cpp \
+    FunctionDispatcher.cpp \
+    GregorianDateTime.cpp \
     gobject/GOwnPtr.cpp \
     gobject/GRefPtr.cpp \
     HashTable.cpp \
     MD5.cpp \
     MainThread.cpp \
+    MediaTime.cpp \
     MetaAllocator.cpp \
     NullPtr.cpp \
     NumberOfCores.cpp \
+    RAMSize.cpp \
     OSRandomSource.cpp \
     qt/MainThreadQt.cpp \
     qt/StringQt.cpp \
     PageAllocationAligned.cpp \
     PageBlock.cpp \
     ParallelJobsGeneric.cpp \
+    PrintStream.cpp \
     RandomNumber.cpp \
     RefCountedLeakCounter.cpp \
     SHA1.cpp \
     StackBounds.cpp \
+    StringPrintStream.cpp \
     TCSystemAlloc.cpp \
     Threading.cpp \
     TypeTraits.cpp \
     WTFThreadData.cpp \
     text/AtomicString.cpp \
+    text/AtomicStringTable.cpp \
+    text/Base64.cpp \
     text/CString.cpp \
     text/StringBuilder.cpp \
     text/StringImpl.cpp \
@@ -225,6 +256,14 @@ win*|wince*: SOURCES += \
     ThreadSpecificWin.cpp \
     ThreadingWin.cpp
 
+win32 {
+    SOURCES += \
+        threads/win/BinarySemaphoreWin.cpp
+    INCLUDEPATH += $$PWD/wtf/threads
+} else {
+    SOURCES += \
+        threads/BinarySemaphore.cpp
+}
 
 QT += core
 QT -= gui
@@ -237,22 +276,8 @@ QT -= gui
     QMAKE_CFLAGS   += -mieee -w
 }
 
-lessThan(QT_GCC_MAJOR_VERSION, 5) {
-    # GCC 4.5 and before
-    lessThan(QT_GCC_MINOR_VERSION, 6) {
-        # Disable C++0x mode in JSC for those who enabled it in their Qt's mkspec.
-        *-g++*:QMAKE_CXXFLAGS -= -std=c++0x -std=gnu++0x
-    }
-
-    # GCC 4.6 and after.
-    greaterThan(QT_GCC_MINOR_VERSION, 5) {
-        if (!contains(QMAKE_CXXFLAGS, -std=c++0x) && !contains(QMAKE_CXXFLAGS, -std=gnu++0x)) {
-            # We need to deactivate those warnings because some names conflicts with upcoming c++0x types (e.g.nullptr).
-            QMAKE_CFLAGS_WARN_ON += -Wno-c++0x-compat
-            QMAKE_CXXFLAGS_WARN_ON += -Wno-c++0x-compat
-            QMAKE_CFLAGS += -Wno-c++0x-compat
-            QMAKE_CXXFLAGS += -Wno-c++0x-compat
-        }
-    }
+*-g++*:lessThan(QT_GCC_MAJOR_VERSION, 5):lessThan(QT_GCC_MINOR_VERSION, 6) {
+    # For GCC 4.5 and before we disable C++0x mode in JSC for if enabled in Qt's mkspec
+    QMAKE_CXXFLAGS -= -std=c++0x -std=gnu++0x -std=c++11 -std=gnu++11
 }
 

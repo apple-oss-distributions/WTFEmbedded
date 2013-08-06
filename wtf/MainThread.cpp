@@ -36,10 +36,8 @@
 #include "Threading.h"
 #include <wtf/ThreadSpecific.h>
 
+#if PLATFORM(IOS)
 #include <wtf/ios/WebCoreThread.h>
-
-#if PLATFORM(CHROMIUM)
-#error Chromium uses a different main thread implementation
 #endif
 
 namespace WTF {
@@ -122,6 +120,7 @@ void initializeMainThread()
     pthread_once(&initializeMainThreadKeyOnce, initializeMainThreadOnce);
 }
 
+#if !USE(WEB_THREAD)
 static void initializeMainThreadToProcessMainThreadOnce()
 {
     mainThreadFunctionQueueMutex();
@@ -132,6 +131,8 @@ void initializeMainThreadToProcessMainThread()
 {
     pthread_once(&initializeMainThreadKeyOnce, initializeMainThreadToProcessMainThreadOnce);
 }
+#endif // !USE(WEB_THREAD)
+
 #endif
 
 // 0.1 sec delays in UI is approximate threshold when they become noticeable. Have a limit that's half of that.
@@ -235,7 +236,11 @@ void callOnMainThread(const Function<void ()>& function)
 
 void setMainThreadCallbacksPaused(bool paused)
 {
+#if !PLATFORM(IOS)
+    ASSERT(isMainThread());
+#else
     ASSERT((isMainThread() || pthread_main_np()) && WebCoreWebThreadIsLockedOrDisabled());
+#endif
 
     if (callbacksPaused == paused)
         return;

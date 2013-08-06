@@ -53,19 +53,17 @@
 
 #endif
 
-#include <WTFThreadData.h>
-
 namespace WTF {
 
 // Bug 26276 - Need a mechanism to determine stack extent
 //
 // These platforms should now be working correctly:
-//     DARWIN, QNX, UNIX
+//     DARWIN, OPENBSD, QNX, SOLARIS, UNIX
 // These platforms are not:
-//     WINDOWS, SOLARIS, OPENBSD, WINCE
+//     WINDOWS, WINCE
 //
 // FIXME: remove this! - this code unsafely guesses at stack sizes!
-#if OS(WINDOWS) || OS(SOLARIS) || OS(OPENBSD)
+#if OS(WINDOWS)
 // Based on the current limit used by the JSC parser, guess the stack size.
 static const ptrdiff_t estimatedStackSize = 128 * sizeof(void*) * 1024;
 // This method assumes the stack is growing downwards.
@@ -81,24 +79,17 @@ void StackBounds::initialize()
 {
     pthread_t thread = pthread_self();
     m_origin = pthread_get_stackaddr_np(thread);
-    m_bound = static_cast<char*>(m_origin) - pthread_get_stacksize_np(thread);
-}
+    rlim_t size = 0;
+    if (pthread_main_np()) {
+        // FIXME: <rdar://problem/13741204>
+        // pthread_get_size lies to us when we're the main thread, use get_rlimit instead
+        rlimit limit;
+        getrlimit(RLIMIT_STACK, &limit);
+        size = limit.rlim_cur;
+    } else
+        size = pthread_get_stacksize_np(thread);
 
-void StackBounds::checkConsistency() const
-{
-#if !ASSERT_DISABLED
-    // Skip consistency check if this StackBounds was initialized
-    // on a different thread than the current thread.
-    const StackBounds* stack = &wtfThreadData().stack();
-    if (stack != this)
-        return;
-
-    void* currentPosition = &currentPosition;
-    ASSERT(m_origin != m_bound);
-    ASSERT(isGrowingDownward()
-           ? (currentPosition < m_origin && currentPosition > m_bound)
-           : (currentPosition > m_origin && currentPosition < m_bound));
-#endif
+    m_bound = static_cast<char*>(m_origin) - size;
 }
 
 #elif OS(QNX)
@@ -133,7 +124,7 @@ void StackBounds::initialize()
     stack_t s;
     thr_stksegment(&s);
     m_origin = s.ss_sp;
-    m_bound = estimateStackBound(m_origin);
+    m_bound = static_cast<char*>(m_origin) - s.ss_size;
 }
 
 #elif OS(OPENBSD)
@@ -144,7 +135,11 @@ void StackBounds::initialize()
     stack_t stack;
     pthread_stackseg_np(thread, &stack);
     m_origin = stack.ss_sp;
-    m_bound = estimateStackBound(m_origin);
+#if CPU(HPPA)
+    m_bound = static_cast<char*>(m_origin) + stack.ss_size;
+#else
+    m_bound = static_cast<char*>(m_origin) - stack.ss_size;
+#endif
 }
 
 #elif OS(UNIX)

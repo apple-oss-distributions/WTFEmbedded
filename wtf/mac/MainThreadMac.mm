@@ -36,6 +36,10 @@
 #import <wtf/HashSet.h>
 #import <wtf/Threading.h>
 
+#if USE(WEB_THREAD)
+#include <wtf/ios/WebCoreThread.h>
+#endif
+
 @interface JSWTFMainThreadCaller : NSObject {
 }
 - (void)call;
@@ -58,6 +62,11 @@ static bool mainThreadEstablishedAsPthreadMain;
 static pthread_t mainThreadPthread;
 static NSThread* mainThreadNSThread;
 
+#if USE(WEB_THREAD)
+static ThreadIdentifier sApplicationUIThreadIdentifier;
+static ThreadIdentifier sWebThreadIdentifier;
+#endif
+
 void initializeMainThreadPlatform()
 {
     ASSERT(!staticMainThreadCaller);
@@ -70,6 +79,7 @@ void initializeMainThreadPlatform()
     initializeGCThreads();
 }
 
+#if !USE(WEB_THREAD)
 void initializeMainThreadToProcessMainThreadPlatform()
 {
     if (!pthread_main_np())
@@ -84,6 +94,7 @@ void initializeMainThreadToProcessMainThreadPlatform()
     
     initializeGCThreads();
 }
+#endif // !USE(WEB_THREAD)
 
 static void timerFired(CFRunLoopTimerRef timer, void*)
 {
@@ -133,13 +144,41 @@ bool isMainThread()
     return pthread_equal(pthread_self(), mainThreadPthread);
 }
 
-// This function is the same as isMainThread() above except that it does not do
-// a ASSERT(mainThreadPthread). This should only be used by code that can get
-// invoked when the WebThread hasn't been started. See <rdar://8502487>.
+#if USE(WEB_THREAD)
+bool isUIThread()
+{
+    return pthread_main_np();
+}
+
 bool isWebThread()
 {
-    ASSERT(!mainThreadEstablishedAsPthreadMain);
     return pthread_equal(pthread_self(), mainThreadPthread);
 }
+
+void initializeApplicationUIThreadIdentifier()
+{
+    ASSERT(pthread_main_np());
+    sApplicationUIThreadIdentifier = currentThread();
+}
+
+void initializeWebThreadIdentifier()
+{
+    ASSERT(!pthread_main_np());
+    sWebThreadIdentifier = currentThread();
+}
+
+bool canAccessThreadLocalDataForThread(ThreadIdentifier threadId)
+{
+    ThreadIdentifier currentThreadId = currentThread();
+    if (threadId == currentThreadId)
+        return true;
+
+    if (threadId == sWebThreadIdentifier || threadId == sApplicationUIThreadIdentifier)
+        return (currentThreadId == sWebThreadIdentifier || currentThreadId == sApplicationUIThreadIdentifier) && WebCoreWebThreadIsLockedOrDisabled();
+
+    return false;
+}
+
+#endif // USE(WEB_THREAD)
 
 } // namespace WTF
